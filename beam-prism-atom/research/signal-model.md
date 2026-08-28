@@ -98,17 +98,17 @@ Anomaly/recovery answer unchanged: `condition` rows in `beam.signals` — anomal
 Atom diverges from Axiom deliberately: natural dataset lifecycle + honest, constrained ingest kinds. Evidence: `history://AtomOtelGap`, `history://OverstreamOtel`. Overstream (overstreamhq/overstream, `worker-research` branch) is Neil's testing ground for Atom/Axiom's future; work migrates into atom bit by bit.
 
 ### A1 — auto-create datasets on ingest
-Today `POST /v1/ingest/{unknown}` → 404 after name validation + auth, before EventDB (`ingestapi/handler.go:147-170`). Metal `CreateDataset` = idempotent `PUT /datasets/{fqdn}` (`dbclient/datasets.go:407-438`) → lazy create-on-first-ingest is race-safe: resolve-or-insert Postgres org/name→FQDN mapping, ensure in Metal, forward. (Overstream instead pre-creates a fixed logical set at startup with cached ensure+retry — atom goes further: as-needed.) Open micro-decision: capability gating auto-create (`create`+`ingest` vs dedicated grant) + audit row.
+Today `POST /v1/ingest/{unknown}` → 404 after name validation + auth, before EventDB (`ingestapi/handler.go:147-170`). Metal `CreateDataset` = idempotent `PUT /datasets/{fqdn}` (`dbclient/datasets.go:407-438`) → lazy create-on-first-ingest is race-safe: resolve-or-insert Postgres org/name→FQDN mapping, ensure in Metal, forward. (Overstream instead pre-creates a fixed logical set at startup with cached ensure+retry — atom goes further: as-needed.) RESOLVED: auto-create requires token with both `create` and `ingest` on the dataset name; audit row on create.
 
 ### A2 — bare OTel → auto-created default datasets
-Today bare `/v1/logs` / `/v1/traces` without dataset header → 400 (`handler.go:113-146`). New: route to per-kind default datasets, auto-created via A1. Overstream precedent names: `logs`, `traces`. Micro-decision: default names (`logs`/`traces` vs `otel-logs`/`otel-traces`).
+Today bare `/v1/logs` / `/v1/traces` without dataset header → 400 (`handler.go:113-146`). New: route to per-kind default datasets, auto-created via A1. RESOLVED: default names `otel-logs` / `otel-traces`.
 
 ### A3 — dataset kinds, v2-only
 Atom has NO kind concept: no column in `atom.datasets` (migration 0001), create API accepts/echoes hardcoded `axiom:events:v1` (`datasetsapi.go:22-24,219-226`), Metal client create carries no kind. Add: kind column, creation-time validation, per-kind ingest enforcement. Kind is *the* mechanism for atom's constraints-Axiom-doesn't-have:
 - `events` — free-form v2 ingest;
 - `otel-logs` / `otel-traces` — only OTLP accepted, projected (A4);
 - `beam-metrics` / `beam-signals` — envelope-validated (signal.kind/subject.* required, window fields, etc.).
-Exposed via v2 dataset API only; v1 keeps legacy hardcoded response for portal compat. Proposed strings: `atom:<kind>:v2`.
+Exposed via v2 dataset API only; v1 keeps legacy hardcoded response for portal compat. RESOLVED kind strings: `axiom:events:v2`, `axiom:otel-logs:v2`, `axiom:otel-traces:v2`, `axiom:beam-metrics:v2`, `axiom:beam-signals:v2` — deliberately `axiom:*`, since Axiom adopts these kinds in time (atom makes the mistakes first). Kind difference makes client query adjustment trivial.
 
 ### A4 — OTLP projection (lift from overstream)
 Atom streams OTLP raw to Metal (byte-identical, `handler_test.go:374-429`); row shape is Metal's axiom-derived dotted sprawl. Adopt overstream's decode-once → typed canonical rows (`internal/gateway/decode.go`, `internal/axiom/ingest.go:149-218`):
