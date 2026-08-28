@@ -1,0 +1,200 @@
+{
+ "uid": "bpa-fleet",
+ "title": "Beam Fleet \u2014 Overview",
+ "timezone": "utc",
+ "refresh": "30s",
+ "time": {
+  "from": "now-1h",
+  "to": "now"
+ },
+ "schemaVersion": 39,
+ "panels": [
+  {
+   "id": 1,
+   "title": "Hosts reporting (metrics, 5m)",
+   "type": "stat",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.metrics'] | where _time > now(-5m) | summarize dcount(['dims.host'])",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Signal rows by kind (1h)",
+   "type": "piechart",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 6,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | summarize count() by ['signal.kind']",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Metric windows/min by host",
+   "type": "timeseries",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 10,
+    "y": 0,
+    "w": 14,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.metrics'] | summarize count() by bin(_time, 1m), ['dims.host']",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "title": "Available memory p95 by host",
+   "type": "timeseries",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.metrics'] | where ['metric.name'] == 'beam.host.memory.available_bytes' | summarize avg(['agg.p95']) by bin(_time, 1m), ['dims.host']",
+     "totals": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 5,
+   "title": "Process count by host",
+   "type": "timeseries",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.metrics'] | where ['metric.name'] == 'beam.host.process.count' | summarize max(['agg.max']) by bin(_time, 1m), ['dims.host']",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "title": "GPU memory used by gpu (p95)",
+   "type": "timeseries",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.metrics'] | where ['metric.name'] == 'beam.gpu.process.used_memory' | summarize avg(['agg.p95']) by bin(_time, 1m), ['dims.host'], ['dims.gpu.uuid']",
+     "totals": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 7,
+   "title": "OTel log volume by service",
+   "type": "timeseries",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['otel-logs'] | summarize count() by bin(_time, 1m), ['resource.service.name']",
+     "totals": false
+    }
+   ]
+  }
+ ]
+}

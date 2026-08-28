@@ -1,0 +1,138 @@
+{
+ "uid": "bpa-signals",
+ "title": "Beam Fleet \u2014 Changes & Conditions",
+ "timezone": "utc",
+ "refresh": "30s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "schemaVersion": 39,
+ "panels": [
+  {
+   "id": 1,
+   "title": "Changes by category (host, 3h)",
+   "type": "barchart",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 10,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | where ['signal.kind'] == 'change' | summarize count() by ['host.name'], ['subject.category']",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Condition transitions",
+   "type": "table",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 10,
+    "y": 0,
+    "w": 14,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | where ['signal.kind'] == 'condition' | project _time, ['host.name'], ['subject.key'], prior_state, state, reason | sort by _time desc | limit 50",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Change feed",
+   "type": "table",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 24,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | where ['signal.kind'] == 'change' | project _time, ['host.name'], ['subject.category'], ['subject.key'], ['package.version.before'], ['package.version.after'] | sort by _time desc | limit 100",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "title": "Inventory entities by host/category (latest known)",
+   "type": "barchart",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 18,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | where ['signal.kind'] == 'inventory' | summarize dcount(['subject.key']) by ['host.name'], ['subject.category']",
+     "totals": false
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "title": "Degraded subjects now (last state != running)",
+   "type": "table",
+   "datasource": {
+    "uid": "atom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 18,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "uid": "atom",
+      "type": "axiomhq-axiom-datasource"
+     },
+     "apl": "['beam.signals'] | where ['signal.kind'] == 'condition' | summarize arg_max(_time, state) by ['host.name'], ['subject.key'] | where state != 'running'",
+     "totals": false
+    }
+   ]
+  }
+ ]
+}
