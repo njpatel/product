@@ -79,3 +79,11 @@ Merge order 3→4 (beam) and 1→2 (atom) with conflict resolution; stand up the
 - beam-* envelope validation (slice 1) depends on C3/C4 stability — contracts frozen above; changes require Neil.
 - Grafana plugin may require endpoints atom lacks (P2 surfaces this before work starts).
 - Metal stand-in may not exercise real APL aggregation (P1 decides simulator vs real).
+
+## Post-execution status (2026-08-28)
+
+DONE. All four slices delivered by parallel agents, merged on `njpatel/bpa-integration` in both repos, six-step acceptance scenario passed against a real EventDB (axiom `cmd/db`) with Grafana+Axiom-plugin as the read surface. Evidence: `evidence/e2e-acceptance.md` + screenshot.
+
+**Contract amendment discovered in integration (C3/C4/C6 wire form):** rows ship as **nested JSON**; EventDB flattens nested objects into unescaped dot-path field names (`['signal.kind']`), while literal-dot flat keys become escaped fields (`['signal\.kind']`) that poison APL. Flat dotted top-level keys are rejected by beam-* admission. Stored/queried field names are unchanged — only the wire encoding nests.
+
+Three integration-phase fixes beyond the slices (all committed on integration branches): atom APL dataset-name parser treating field refs as dataset refs; beam standalone-node startup deadlock on initial inventory emission; timestamp-field `_time` alignment. Follow-ups listed in the evidence doc.
