@@ -83,12 +83,39 @@ Anomaly/recovery answer unchanged: `condition` rows in `beam.signals` — anomal
 - Scalars answer single-host dashboard queries natively in APL (`avg`=sum/count, max-of-max, percentile-of-p95 as approximation). Cross-host/cross-window exact percentiles use the `bins[]` arrays merged Stitch-style by the reading surface (portal/console), not APL.
 - Cardinality budget per class: dims limited to host, gpu.uuid/index, workload.id/kind, adapter.id, unit; PIDs live only in exemplars.
 
-## Open decisions for Neil
+## Decisions (resolved 2026-08-28 with Neil)
 
-1. ~~D1 dataset split~~ — RESOLVED: two managed datasets (`beam.metrics`, `beam.signals`) + shared OTel logs/traces datasets.
-2. **D2 histogram bins** — ship `bins[]` in v1 (bigger events, exact cross-host percentiles later) or scalars-only v1 with bins behind config? Recommend bins-on, they're already computed.
-3. **D3 before/after encoding** — proposed: promoted well-knowns + JSON-string residue (tier 2/3 above). Confirm.
-4. **D4 condition_event schema** — sign off field set (subject, state, prior_state, since, reason, severity, evidence).
-5. **D5 where signals get *shown*** — atom console today can't chart anything. Grafana-portal APL projections first? New atom console pages? Both are atom-repo scope, not beam.
-6. **D6 anomaly detection v1 scope** — model above deliberately ships the *channel* without detectors (threshold/state transitions only). Detectors (baseline deviation, world-model) become pure beam-internal work later. Confirm that sequencing.
-7. **D7 beam's "prism relay" docs** — beam DECISIONS still describe a Go fleet relay named prism; reconcile with Rust prism reality when we plan the prism leg.
+1. ~~D1 dataset split~~ — two managed datasets (`beam.metrics`, `beam.signals`) + shared OTel logs/traces datasets.
+2. ~~D2 histogram bins~~ — ship `bins[]` in v1. Percentiles don't compose; scalars-only makes fleet-wide p95 an approximation, bins let readers merge for exact answers. Beam already computes them; dropping is irreversible loss, ignoring is free.
+3. ~~D3 before/after encoding~~ — promoted well-knowns (curated per-category typed columns, e.g. `package.version.before/after`, `listener.port`) + full objects as JSON-string residue (`change.before_json`). Generic flattening rejected: every distinct shape permanently pollutes dataset schema.
+4. ~~D4 condition envelope~~ — approved as drafted (subject, state, prior_state, since, reason, severity, evidence).
+5. ~~D5 read surface~~ — Grafana + **Axiom datasource plugin** against atom's APL endpoint (real APL). Not grafana-portal Loki/Tempo projections (forces logs/traces UX).
+6. ~~D6 sequencing~~ — nail beam↔atom 100% first; add prism support after. No detectors in v1; `condition` channel ships with state-transition sources only.
+7. ~~D7~~ — prism-relay doc reconciliation deferred to the prism leg.
+
+## Atom-side requirements (added 2026-08-28)
+
+Atom diverges from Axiom deliberately: natural dataset lifecycle + honest, constrained ingest kinds. Evidence: `history://AtomOtelGap`, `history://OverstreamOtel`. Overstream (overstreamhq/overstream, `worker-research` branch) is Neil's testing ground for Atom/Axiom's future; work migrates into atom bit by bit.
+
+### A1 — auto-create datasets on ingest
+Today `POST /v1/ingest/{unknown}` → 404 after name validation + auth, before EventDB (`ingestapi/handler.go:147-170`). Metal `CreateDataset` = idempotent `PUT /datasets/{fqdn}` (`dbclient/datasets.go:407-438`) → lazy create-on-first-ingest is race-safe: resolve-or-insert Postgres org/name→FQDN mapping, ensure in Metal, forward. (Overstream instead pre-creates a fixed logical set at startup with cached ensure+retry — atom goes further: as-needed.) Open micro-decision: capability gating auto-create (`create`+`ingest` vs dedicated grant) + audit row.
+
+### A2 — bare OTel → auto-created default datasets
+Today bare `/v1/logs` / `/v1/traces` without dataset header → 400 (`handler.go:113-146`). New: route to per-kind default datasets, auto-created via A1. Overstream precedent names: `logs`, `traces`. Micro-decision: default names (`logs`/`traces` vs `otel-logs`/`otel-traces`).
+
+### A3 — dataset kinds, v2-only
+Atom has NO kind concept: no column in `atom.datasets` (migration 0001), create API accepts/echoes hardcoded `axiom:events:v1` (`datasetsapi.go:22-24,219-226`), Metal client create carries no kind. Add: kind column, creation-time validation, per-kind ingest enforcement. Kind is *the* mechanism for atom's constraints-Axiom-doesn't-have:
+- `events` — free-form v2 ingest;
+- `otel-logs` / `otel-traces` — only OTLP accepted, projected (A4);
+- `beam-metrics` / `beam-signals` — envelope-validated (signal.kind/subject.* required, window fields, etc.).
+Exposed via v2 dataset API only; v1 keeps legacy hardcoded response for portal compat. Proposed strings: `atom:<kind>:v2`.
+
+### A4 — OTLP projection (lift from overstream)
+Atom streams OTLP raw to Metal (byte-identical, `handler_test.go:374-429`); row shape is Metal's axiom-derived dotted sprawl. Adopt overstream's decode-once → typed canonical rows (`internal/gateway/decode.go`, `internal/axiom/ingest.go:149-218`):
+- resource attrs `resource.<key>`; record attrs unprefixed; `_time` (receipt), `receipt_time`, `source_time`, `signal`;
+- spans: hex `trace_id`/`span_id`/`parent_span_id`, `name`, `kind`, `duration_ns`, `status`, `status_message`;
+- logs: `severity` int, canonical `body`, optional trace correlation.
+Fix two known overstream-prototype gaps during the lift (docs intend both): scope name/version currently discarded; `severity_text` missing. Consequence: atom stops raw-streaming for OTLP content types — buffer→decode→project→NDJSON; seam between `ingestOptions` and `EventDB.Ingest`.
+
+### Parked overstream liftables (later epics, not now)
+Strict typed gate with quarantine + `_failures`; natural keys/fingerprints/actor facets; request-wide size limits; token env-scoping; epoch-based schema evolution (logical→physical dataset registry); projection specs/fidelity raise-ups; receipts; console patterns.
