@@ -34,17 +34,43 @@ Inputs: four parallel research reports (`history://BeamSignals`, `history://Atom
 
 ## Proposal
 
-### Signal taxonomy — five classes, five datasets
+### Signal taxonomy — REVISED (2026-08-28, after discussion): two planes, two managed datasets
 
-| Dataset | Content | Source (beam today) | Cadence | QoS |
-|---|---|---|---|---|
-| `beam.metrics` | Per-window wide metric events: `_time`=window end, `window.start`, `metric.name/unit`, dims, `count/sum/min/max`, `p50/p95/p99`, optional `bins[]` (exp-histogram, Stitch-style) | pipeline aggregates, GPU/DCGM series | 30s (align epoch; delta windows) | P1/P2 |
-| `beam.changes` | `change_event` as-is: category, key, before/after, provenance | inventory diff | on change | P0 |
-| `beam.state` | **New normalized `condition_event`**: subject{kind,id}, state, prior_state, since, reason, severity, evidence refs. Covers adapter/GPU/sensor lifecycle today; **anomaly=enter-abnormal, recovery=return-to-normal tomorrow** — same schema, detectors slot in later without wire changes | adapter_status, GPU cycle status, sensor lifecycle (normalized) | on transition | P0 |
-| `beam.inventory` | Compact snapshots + host_baseline ("what is this host now"; latest via `arg_max`) | inventory_snapshot, host_baseline | 5m + boot | P2 |
-| `beam.events` | Evidence: attribution graph (never summarized), kernel aggregates/exemplars, system/audit events, self_telemetry | remaining kinds | live/30s | mixed |
+Supersedes the initial five-dataset sketch. Neil's push: an envelope should collapse the count; beam also emits *normal* OTel alongside its managed picture.
 
-Answer to the side-band question: **yes, and it already half-exists.** `change_event` is the change side-band; the missing piece is one new `condition_event` kind that normalizes today's scattered lifecycle/degraded/recovery signals and becomes the anomaly/recovery channel when detectors land. Known-schema timestamped JSON, exactly as you framed it.
+**OTel plane (shared datasets):** beam emits native OTLP logs/traces into the same datasets other sources use — journald/audit, kernel exemplars as logs with trace/span context where available. Note this changes beam's OTLP path: today it wraps its own envelope in every log record; the plane split requires native OTel semantics there instead.
+
+**Beam plane (managed datasets):** only one boundary is load-bearing by EventDB/APL criteria (retention, scan volume, schema shape) — high-volume uniform periodic rows vs low-volume discrete statements:
+
+| Dataset | Content | Cadence | QoS |
+|---|---|---|---|
+| `beam.metrics` | Uniform window rows: `_time`=window.end, `window.start`, `metric.name/unit`, `dims.*`, `agg.{count,sum,min,max,p50,p95,p99}`, `bins[]` (exp-histogram, Stitch-style) | 30s epoch-aligned, delta | P1/P2 |
+| `beam.signals` | One envelope for everything discrete — changes, conditions/anomalies/recoveries, inventory, attribution. All are the same sentence: *"at T, subject S is/became X, because R, here's evidence."* | on change/transition + low-cadence inventory heartbeat | P0 |
+
+`beam.signals` envelope:
+
+```
+_time, host.name, host.boot_id
+signal.kind      change | condition | inventory | attribution
+subject.category package | unit | listener | container | gpu | adapter | sensor | workload | node | edge
+subject.key      stable identity ("openssl", "sshd.service", "tcp/0.0.0.0:443", gpu.uuid…)
+state, prior_state, since, reason, severity
+evidence.ids[]   envelope ids → flight recorder / OTel logs drill-down
+```
+
+Field discipline, three tiers — the "not a map dump" answer:
+1. envelope — always present, always typed;
+2. promoted well-knowns per category — the queryable fields, hand-picked and bounded (`package.version.before/after`, `listener.port`, `gpu.index`, …);
+3. residue — arbitrary before/after shapes as JSON strings (`change.before_json`): greppable forensics, zero field-explosion risk.
+
+**Row orientation kills the map problem.** Inventory snapshots as maps would flatten into thousands of sparse fields. Instead: one row per entity in the envelope (`signal.kind=inventory`, `subject.category=package`, `subject.key=openssl`, `package.version=3.2.1`). Latest host state = `summarize arg_max(_time, *) by subject.key`; a change is the same row shape with `prior_state`/`before` filled. Snapshots drop to a reconciliation heartbeat (~hourly) since changes carry deltas.
+
+The former `beam.events` class dissolves: evidence is either OTel logs (shared plane) or attribution rows (`beam.signals`). Kernel exec/exit aggregates are counts → `beam.metrics`.
+
+Cost of the merge, honestly: changes/inventory share retention+tokens with conditions (acceptable — all long-retention P0-ish), and `signal.kind` filters replace dataset selection (trivial scan overhead at side-band volumes).
+
+Anomaly/recovery answer unchanged: `condition` rows in `beam.signals` — anomaly = enter-abnormal, recovery = return-to-normal; detectors slot in later with zero wire changes.
+
 
 ### Wire language: native NDJSON wide events on the Axiom ingest API
 - Beam gains an `axiom+http(s)` endpoint scheme: `POST {base}/v1/ingest/{dataset}`, bearer token, NDJSON, gzip/zstd, `timestamp-field` mapping from envelope timestamp, per-class dataset routing, existing idempotency keys preserved end-to-end.
@@ -59,9 +85,9 @@ Answer to the side-band question: **yes, and it already half-exists.** `change_e
 
 ## Open decisions for Neil
 
-1. **D1 dataset split** — five `beam.*` datasets (proposed; independent retention/tokens, cheap queries) vs one dataset + `kind` discriminator. Recommend split.
+1. ~~D1 dataset split~~ — RESOLVED: two managed datasets (`beam.metrics`, `beam.signals`) + shared OTel logs/traces datasets.
 2. **D2 histogram bins** — ship `bins[]` in v1 (bigger events, exact cross-host percentiles later) or scalars-only v1 with bins behind config? Recommend bins-on, they're already computed.
-3. **D3 before/after encoding** in `beam.changes` — object-fields map vs JSON string vs raw flatten. Cardinality risk lives here.
+3. **D3 before/after encoding** — proposed: promoted well-knowns + JSON-string residue (tier 2/3 above). Confirm.
 4. **D4 condition_event schema** — sign off field set (subject, state, prior_state, since, reason, severity, evidence).
 5. **D5 where signals get *shown*** — atom console today can't chart anything. Grafana-portal APL projections first? New atom console pages? Both are atom-repo scope, not beam.
 6. **D6 anomaly detection v1 scope** — model above deliberately ships the *channel* without detectors (threshold/state transitions only). Detectors (baseline deviation, world-model) become pure beam-internal work later. Confirm that sequencing.
