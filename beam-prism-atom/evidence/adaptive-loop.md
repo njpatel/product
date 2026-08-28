@@ -41,3 +41,9 @@ The earlier failed attempt is preserved honestly: bpa-cloud-1 condition `failed`
 ## Vultr status
 
 API flaps: intermittent 200/401/500 on reads, consistent 401 "Invalid API token" on writes after the IP allowlist edit — likely the key was regenerated or is read-scoped. Needs the current key value re-checked in the Vultr portal.
+
+## Teardown (2026-08-28 end of day)
+
+- Latitude `sv_BDXM5EkX70rpk` (bpa-cloud-1) deleted — `DELETE /servers` 204, zero servers remain. Reverse tunnel stopped. Its control-registry entry stays as a disconnected node (harmless; useful for tomorrow's "node disappeared" view).
+- Vultr verified zero instances (nothing was ever created; API writes still rejecting the key).
+- Kept running on adi*: EventDB + delta-cache, atom, Grafana (+dashboards), beam-control leader, beam nodes on adipurush and adiyogi (sensor active on adiyogi), with the deployed `postgres-ready` adapter still probing and reporting.
