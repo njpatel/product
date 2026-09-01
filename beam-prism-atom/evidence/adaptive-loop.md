@@ -51,3 +51,12 @@ API flaps: intermittent 200/401/500 on reads, consistent 401 "Invalid API token"
 ## Vultr leg (2026-09-01)
 
 Key issues resolved (rotating egress IP → allowlist removed; original key was read-scoped → replaced). `bpa-vultr-1` (45.32.233.244) and `bpa-vultr-2` (95.179.150.191), `vc2-2c-4gb` AMS, Ubuntu 24.04: full deploy (eBPF sensor + node), reverse tunnels, control enrollment — both `connected: true` within seconds of start; WS-handshake fix validated on a second WAN path. First vultr-1 instance wedged in Vultr `pending` >10 min and was destroy/recreated. Fleet now: adipurush, adiyogi, bpa-vultr-1, bpa-vultr-2 live; bpa-cloud-1 visible as disconnected (torn down).
+
+## Vultr VPS-class test pass (2026-09-01)
+
+All fleet-confidence checks re-validated on the VPS pair, plus the evolution loop over a tunnel:
+- Package changes with versions, incl. apt's own churn (man-db remove/reinstall, libc-bin) — transitive visibility confirmed again.
+- Unit `active→inactive→active` with promoted states on both nodes.
+- Listener changes on both; sensor lifecycle conditions; honest `nvidia_smi degraded` on GPU-less VPS.
+- Sensor kernel counters and OTel logs flowing from both.
+- **Evolution on VPS over tunnel: postgres install → `needs_build` in 15 s → attach/approve → `deployed`/`covered` in ~75 s → `postgres-ready` condition `running` + adapter telemetry from bpa-vultr-1.** Second adapter deployment site (with adiyogi), zero deploy friction — the 0700/0600/naming lessons hold as a repeatable recipe.
