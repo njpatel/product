@@ -47,3 +47,7 @@ API flaps: intermittent 200/401/500 on reads, consistent 401 "Invalid API token"
 - Latitude `sv_BDXM5EkX70rpk` (bpa-cloud-1) deleted — `DELETE /servers` 204, zero servers remain. Reverse tunnel stopped. Its control-registry entry stays as a disconnected node (harmless; useful for tomorrow's "node disappeared" view).
 - Vultr verified zero instances (nothing was ever created; API writes still rejecting the key).
 - Kept running on adi*: EventDB + delta-cache, atom, Grafana (+dashboards), beam-control leader, beam nodes on adipurush and adiyogi (sensor active on adiyogi), with the deployed `postgres-ready` adapter still probing and reporting.
+
+## Vultr leg (2026-09-01)
+
+Key issues resolved (rotating egress IP → allowlist removed; original key was read-scoped → replaced). `bpa-vultr-1` (45.32.233.244) and `bpa-vultr-2` (95.179.150.191), `vc2-2c-4gb` AMS, Ubuntu 24.04: full deploy (eBPF sensor + node), reverse tunnels, control enrollment — both `connected: true` within seconds of start; WS-handshake fix validated on a second WAN path. First vultr-1 instance wedged in Vultr `pending` >10 min and was destroy/recreated. Fleet now: adipurush, adiyogi, bpa-vultr-1, bpa-vultr-2 live; bpa-cloud-1 visible as disconnected (torn down).
